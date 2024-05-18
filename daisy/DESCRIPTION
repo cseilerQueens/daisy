@@ -1,0 +1,17 @@
+Package: daisy
+Title: Data Assimilation System
+Version: 0.0.0.9000
+Authors@R: 
+    person("Christian", "Seiler", , "christian.seiler@queensu.ca", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-2092-0168"))
+Description: Data assimilation system for the purpose of optimizing the Canadian Land Surface Scheme Including Biogeochemical Cycles (CLASSIC).
+License: GPL-3
+Encoding: UTF-8
+Imports:
+    foreach,
+    ncdf4, 
+    ncdf4.helpers, 
+    raster,
+    sp
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
