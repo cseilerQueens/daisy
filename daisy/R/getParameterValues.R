@@ -24,11 +24,22 @@ getParameterValues <- function(parameterFile, parameterName) {
     data <- data[grep(parameterName, data)]
 
     # Clean data from unwanted information
+    ## (a)
+    data <- sub("!.*$", "", data)
+    ## (b)
+    data <- gsub(" ", "", data)
+    ## (c)
+    df <- data.frame(data)
+    # cleaned_df <- na.omit(df) # Remove rows with empty strings
+    cleaned_df <- df[df != "", , drop = FALSE]
+    data <- as.matrix(cleaned_df) # Convert back to matrix if needed
+    ## (d)
     toBeExcluded <- grep(pattern = "!", x = data)
     if (length(toBeExcluded) > 0) {
         data <- data[-toBeExcluded]
     }
 
+    
     if (length(data) > 4) {
         data <- data[1:4]
     }
@@ -46,7 +57,7 @@ getParameterValues <- function(parameterFile, parameterName) {
         data <- matrix(data, ncol = numberOfColumns)
     } else {
 
-        data <- matrix(data, ncol = 1)
+        data <- matrix(data, nrow = 1)
     }
     rownames(data) <- rowNames
     return(data)

@@ -6,15 +6,14 @@
 #' @return A list with the mornalized parameter values, the range, and the minimum value
 #'
 #' @examples
-#' x <- -100:100
-#' intFun.normalize(x)
+#' intFun.normalize(x=5,u=6,l=2)
 #' @export
-intFun.normalize <- function(x) {
-    maxValue <- max(x)
-    minValue <- min(x)
-    range <- maxValue - minValue
-    normValues <- (x - minValue)/range
-    return(list(normValues, range, minValue))
+
+intFun.normalize <- function(x, u, l) {
+  # x = value, u = upper bound, l = lower bound
+  # normalize x, such that x ranges between 0 and 1:
+  xn <- (x - l) / (u - l)
+  return(xn)
 }
 
 #-----------------------------------------------------------
@@ -32,8 +31,8 @@ intFun.normalize <- function(x) {
 #' intFun.unnormalize(normValues = normalization[[1]], range = normalization[[2]], minValue = normalization[[3]])
 #' 
 #' @export
-intFun.unnormalize <- function(normValues, range, minValue) {
-    x <- normValues * range + minValue
+intFun.unnormalize <- function(normValues, upperValues, lowerValues) {
+    x <- normValues * (upperValues - lowerValues) + lowerValues
     return(x)
 }
 

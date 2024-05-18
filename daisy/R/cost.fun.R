@@ -2,8 +2,9 @@
 #' Costfunction for optimizing parameter values
 #' @description This function is a cost function that evaluates model performance
 #' @param normParameterValues Vector with normalized PFT-specific parameter values (dimensionless)
-#' @param range List that gives the difference between the maximum and minimum parameter value for each parameter
-#' @param minValue List with the minimum parameter value for each parameter
+#' @param lowerBound List with lower bound parameter values 
+#' @param upperBound List with upper bound parameter values 
+#' @param parameterValueLength Vector with the number of parameter values per parameter
 #' @param parameterNames List of parameter names
 #' @param parameterFile Path to CLASSIC parameter file (run_parameters.txt)
 #' @param mod.list List of paths to CLASSIC model output
@@ -15,13 +16,17 @@
 #' @return Textfiles (daisyOutput_Ref-ID) with scores (columns 1-6) and parameter values (remaining columns)
 #' @export
 
-cost.fun <- function(normParameterValues, range, minValue, parameterNames, parameterFile,
+cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValueLength, parameterNames, parameterFile,
     mod.list, ref.list, ref.id.list, ref.unit.conv.list, run_classic_file, modelOutputFolder) {
-
+  
     n <- length(parameterNames)
 
     # Convert vector to list, where each element represents one parameter
-    normParameterValuesList <- split(normParameterValues, rep(1:n, each = length(normParameterValues)/n))
+    breakpoints <- rep(seq_along(parameterValueLength), times = parameterValueLength)
+    normParameterValuesList <- split(x = normParameterValues, f = breakpoints)
+    
+    upperBoundList <- split(x = upperBound, f = breakpoints)
+    lowerBoundList <- split(x = lowerBound, f = breakpoints)
 
     # The loop edits the parameter file for each parameter
 
@@ -33,28 +38,22 @@ cost.fun <- function(normParameterValues, range, minValue, parameterNames, param
         parameterName <- parameterNames[[i]]
 
         # un-normalize parameter values
-        parameterValues <- intFun.unnormalize(normParameterValuesList[[i]], range[[i]],
-            minValue[[i]])
+        parameterValues <- intFun.unnormalize(normParameterValuesList[[i]], upperBoundList[[i]], lowerBoundList[[i]])
+        
         daisyOutput <- c(daisyOutput, parameterValues)
 
         # Get the default parameter values
         defaultParameterValues <- getParameterValues(parameterFile, parameterName)
-
-        # CLASSIC has 12 PFTs, however, the default configuration only uses 9
-        # PFTs.  The PFTs that are not being used have parameter values that
-        # are equal to zero.  Those values need to be excluded, otherwise the
-        # matrix inversion does not work as you can't divide by zero. Find the
-        # location where PFT values are zero:
-
+        
         non_zero_indices <- which(defaultParameterValues != 0, arr.ind = TRUE)
         newValues <- defaultParameterValues
-
+        
         # Replace prior with new parameter values, skipping all instances where
         # the parameter values equal zero in the parameter file
-
+        
         newValues[non_zero_indices] <- defaultParameterValues[non_zero_indices] -
-            defaultParameterValues[non_zero_indices] + parameterValues
-
+          defaultParameterValues[non_zero_indices] + parameterValues[!is.na(parameterValues)]
+        
         # Overwrite the parameter file with the new parameter values
         lines <- editParameterFile(parameterFile, parameterName, parameterValues = newValues)
         writeLines(lines, parameterFile)
