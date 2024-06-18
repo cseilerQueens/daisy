@@ -23,4 +23,4 @@ R -e "install.packages('devtools', repos='https://mirror.csclub.uwaterloo.ca/CRA
 R -e "install.packages('roxygen2', repos='https://mirror.csclub.uwaterloo.ca/CRAN/', dep=TRUE)"
 R -e "install.packages('GA', repos='https://mirror.csclub.uwaterloo.ca/CRAN/', dep=TRUE)"
 R -e "install.packages('latex2exp', repos='https://mirror.csclub.uwaterloo.ca/CRAN/', dep=TRUE)"
-
+R -e "install.packages(c('shiny', 'foreach', 'slickR'), repos='https://mirror.csclub.uwaterloo.ca/CRAN/', dep=TRUE)"
