@@ -13,11 +13,12 @@
 #' @param ref.unit.conv.list List of factors used for converting reference data units
 #' @param run_classic_file Path to CLASSIC submission file (run_classic.sh)
 #' @param modelOutputFolder Path to model output folder
+#' @param keepModelOutput Logical. If TRUE the model output of each simulation is stored. Default is set to FALSE.
 #' @return Textfiles (daisyOutput_Ref-ID) with scores (columns 1-6) and parameter values (remaining columns)
 #' @export
 
 cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValueLength, parameterNames, parameterFile,
-    mod.list, ref.list, ref.id.list, ref.unit.conv.list, run_classic_file, modelOutputFolder) {
+    mod.list, ref.list, ref.id.list, ref.unit.conv.list, run_classic_file, modelOutputFolder, keepModelOutput = FALSE) {
   
     n <- length(parameterNames)
 
@@ -326,10 +327,15 @@ cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValue
 
     # Move outputs to a new folder so that they are not overwritten
 
+    if (keepModelOutput == TRUE){
     NewModelOutputFolder <- paste(modelOutputFolder, timeStamp, sep = "_")
     moveModelOutputFolder <- paste("mv", modelOutputFolder, NewModelOutputFolder,
         sep = " ")
     system(moveModelOutputFolder)
+    } else {
+    removeModelOutputFolder <- paste("rm", modelOutputFolder, sep = " ")
+    system(removeModelOutputFolder)
+    }
 
     # Calculate the mean score across all evaluations
     S <- mean(scores, na.rm = TRUE)
