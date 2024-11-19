@@ -1,26 +1,112 @@
 ################################################################################
 #' Costfunction for optimizing parameter values
 #' @description This function is a cost function that evaluates model performance
-#' @param normParameterValues Vector with normalized PFT-specific parameter values (dimensionless)
-#' @param lowerBound List with lower bound parameter values 
-#' @param upperBound List with upper bound parameter values 
-#' @param parameterValueLength Vector with the number of parameter values per parameter
-#' @param parameterNames List of parameter names
-#' @param parameterFile Path to CLASSIC parameter file (run_parameters.txt)
-#' @param mod.list List of paths to CLASSIC model output
-#' @param ref.list List of paths to reference output
-#' @param ref.id.list List with reference IDs
-#' @param ref.unit.conv.list List of factors used for converting reference data units
-#' @param run_classic_file Path to CLASSIC submission file (run_classic.sh)
-#' @param modelOutputFolder Path to model output folder
-#' @param keepModelOutput Logical. If TRUE the model output of each simulation is stored. Default is set to FALSE.
-#' @return Textfiles (daisyOutput_Ref-ID) with scores (columns 1-6) and parameter values (remaining columns)
+#' @param identifier The line of the indivFile to read from
+#' @param indivFile File containing all the individuals
+#' @param argValuesFile File containing the values for all the cost function parameters
+#' @param argTypesFile File containing the types of all the cost function parameters
+#' @param argLengthsFile File containing the length of all the cost function parameters
+#' @param argNamesFile File containing the names of all the cost function parameters
+#' @param dataAssimPath The file path to the data-assimilation folder
+#' @param argsToChange A list of arguments that are dependent on the run identifier
+#' @param farmName The name of the farm
+#' @param keepOutput Logical value indicating if output folders should be kept upon completion.
+#' @param finalOutputFolder The folder to place completed simulations.
 #' @export
 
-cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValueLength, parameterNames, parameterFile,
-    mod.list, ref.list, ref.id.list, ref.unit.conv.list, run_classic_file, modelOutputFolder, keepModelOutput = FALSE) {
+cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile, 
+                     argLengthsFile, argNamesFile, dataAssimPath, argsToChange, 
+                     farmName, keepOutput, finalOutputFolder) {
   
+    # If output is being kept, a final output folder must be specified.
+    if (keepOutput) {
+      if (is.null(finalOutputFolder)) {
+        stop("Final output folder must be specified if output is being kept.")
+      }
+    }
+  
+    oldDir <- paste0(dataAssimPath, "/simulations")
+    newDir <- paste0(dataAssimPath, "/", farmName, "/RUN", identifier)
+    
+    # Copy values file into the RUN folder to be used by this case.
+    system(paste("cp", argValuesFile, newDir))
+    argValuesFile <- paste0(newDir, "/argValues.txt")
+    
+    Sys.sleep(1)
+    # Call the setArgs.R file to switch the values of all parameters that are
+    # dependent on the identifier.
+    setArgs(identifier, oldDir, newDir, argNamesFile, argValuesFile, argsToChange, farmName)
+  
+    Sys.sleep(5)
+    
+    # Read in the data for the arguments.
+    argVals <- readLines(argValuesFile)
+    argTypes <- readLines(argTypesFile)
+    argLengths <- readLines(argLengthsFile)
+    argNames <- readLines(argNamesFile)
+    
+    # Format arguments correctly.
+    for (index in 1:length(argVals)) {
+      
+      types <- unlist(strsplit(argTypes[index], " "))
+      dataType <- types[1]
+      elementType <- types[2]
+      
+      if (dataType != "list") {
+      
+        # Split the argument into a list if it has a length > 1.
+        if (argLengths[index] > 1) {
+          arg <- strsplit(argVals[index], " ")
+          
+        # Otherwise, set it just as it is.
+        } else {
+          arg <- argVals[index]
+        }
+        
+        # Format elements.
+        # Double
+        if (elementType == "double") {
+          arg <- lapply(arg, as.double)
+        # Integer
+        } else if (elementType == "integer") {
+          arg <- lapply(arg, as.integer)
+        # Character
+        } else if (elementType == "character") {
+          arg <- lapply(arg, trimws)
+        }
+        
+        # Unlist.
+        arg <- unlist(arg)
+        
+      # Data type is a list.
+      } else if (dataType == "list") {
+        arg <- unlist(strsplit(argVals[index], " "))
+        
+        # If element type is double, convert to double.
+        if (elementType == "double") {
+          arg <- unlist(lapply(arg, as.double))
+        # If element type is character, trim white space
+        } else if (elementType == "character") {
+          arg <- unlist(lapply(arg, trimws))
+        }
+      }
+        
+      # Assign the argument its name.
+      assign(argNames[index], arg)
+    }
+    
+    Sys.sleep(1)
+    
     n <- length(parameterNames)
+    
+    library(readr)
+    
+    # Read in the data for the arguments
+    normParameterValues <- read_lines(file = indivFile, skip = as.integer(identifier)-1, n_max = 1)
+    # Split the individual up.
+    normParameterValues <- unlist(strsplit(normParameterValues, " "))
+    # Convert from character to double (requires unlisting again).
+    normParameterValues <- unlist(lapply(normParameterValues, as.double))
 
     # Convert vector to list, where each element represents one parameter
     breakpoints <- rep(seq_along(parameterValueLength), times = parameterValueLength)
@@ -61,16 +147,15 @@ cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValue
 
     }
 
-
     # Run CLASSIC with new parameter file
-    Sys.sleep(10)
+    Sys.sleep(5)
     system(run_classic_file)
 
     # Wait until CLASSIC finishes
     while (!file.exists(mod.list[[1]])) {
-        Sys.sleep(10)
+        Sys.sleep(5)
     }
-    Sys.sleep(10)
+    Sys.sleep(5)
     print("CLASSIC run completed")
 
     # Obtain model and reference data.
@@ -314,31 +399,58 @@ cost.fun <- function(normParameterValues, lowerBound, upperBound, parameterValue
         S <- mean(c(S_bias, S_rmse, S_phase, S_iav, S_dist), na.rm = TRUE)
 
         timeStamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-
+        
+        # Since the cost.fun file gets executed from a different directory in parallel
+        # than sequentially, new score files get created every run. To avoid this,
+        # the directory is changed when creating these score files and then reverted
+        # to what it was before.
+        origDir <- getwd()
+        setwd(dataAssimPath)
+        Sys.sleep(1)
         # Write current scores and parameter values to text file for analysis
         # purpose
         fileName <- paste("daisyOutput", ref.id, sep = "_")
         write.table(x = matrix(c(S, S_bias, S_rmse, S_phase, S_iav, S_dist, daisyOutput,
             timeStamp), nrow = 1), file = fileName, append = TRUE, row.names = FALSE,
             col.names = FALSE)
-
+        # Revert to original directory.
+        setwd(origDir)
+        Sys.sleep(1)
+        
         scores[i] <- S
     }
 
-    # Move outputs to a new folder so that they are not overwritten
-
-    if (keepModelOutput == TRUE){
-    NewModelOutputFolder <- paste(modelOutputFolder, timeStamp, sep = "_")
-    moveModelOutputFolder <- paste("mv", modelOutputFolder, NewModelOutputFolder,
-        sep = " ")
-    system(moveModelOutputFolder)
+    # Move outputs to a new folder so that they are not overwritten.
+    if (keepOutput) {
+      NewModelOutputFolder <- paste(modelOutputFolder, paste0("RUN", identifier), sep = "_")
+      NewModelOutputFolder <- paste(NewModelOutputFolder, timeStamp, sep = "_")
+      moveModelOutputFolder <- paste("mv", modelOutputFolder, NewModelOutputFolder,
+          sep = " ")
+      system(moveModelOutputFolder)
+      Sys.sleep(1)
+      
+      # Move the finished run into the final output folder.
+      
+      moveModelOutputFolder <- paste("mv", NewModelOutputFolder, finalOutputFolder)
+      system(moveModelOutputFolder)
+      Sys.sleep(1)
+      # Make a file containing the name of the output folder for reference.
+      runFolder <- unlist(strsplit(NewModelOutputFolder, "/"))
+      runFolder <- runFolder[length(runFolder)]
+      runFolder <- paste(finalOutputFolder, runFolder, sep = "/")
+      write(runFolder, "simInfo.txt")
+      Sys.sleep(1)
+      
+    # Delete output folder.
     } else {
-    removeModelOutputFolder <- paste("rm", modelOutputFolder, sep = " ")
-    system(removeModelOutputFolder)
+      system(paste("rm -rf", modelOutputFolder))
+      Sys.sleep(1)
     }
 
-    # Calculate the mean score across all evaluations
+    # Calculate the mean score across all evaluations.
     S <- mean(scores, na.rm = TRUE)
+    write(S, "simInfo.txt", append = TRUE)
+    Sys.sleep(2)
+    
     return(S)
-
 }

@@ -25,9 +25,20 @@ editParameterFile <- function(parameterFile, parameterName, parameterValues) {
     # Read in the parameter file run_parameters.txt
     lines <- readLines(parameterFile)
 
+
     # Find the lines containing the parameter that will be updated
     linesToReplace <- grep(pattern = paste(parameterName, "\\(", sep = ""), x = lines)
-
+    
+    if (length(linesToReplace) == 0){
+    # Finds locations for parameters that are not PFT-specific
+    linesToReplace <- grep(pattern = paste(parameterName, " =", sep = ""), x = lines)
+    }
+    
+    if (length(linesToReplace) == 0){
+      print("Error: DAISY did not update parameter values")
+      stop()
+    }
+      
     # Replace the lines with the specified replacement string
 
     counter <- 0
