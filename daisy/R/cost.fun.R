@@ -397,7 +397,7 @@ cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile,
         #---------------------------------------------------------------------------
 
         S <- mean(c(S_bias, S_rmse, S_phase, S_iav, S_dist), na.rm = TRUE)
-
+        
         timeStamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
         
         # Since the cost.fun file gets executed from a different directory in parallel
