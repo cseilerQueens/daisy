@@ -35,8 +35,14 @@ setArgs <- function(identifier, oldOutDir, newOutDir, argNamesFile, argValuesFil
         system(cmd)
         Sys.sleep(1)
         # Adjust argument value.
+      #  cmd <- paste0("sed -i '", line, " s|", originalValue, "|", newOutDir, 
+      #                "/run_parameters.txt|' ", argValuesFile)
+        
+      # As of CLASSICv2.0, the run parameter file name extension is nml:  
+        
         cmd <- paste0("sed -i '", line, " s|", originalValue, "|", newOutDir, 
-                      "/run_parameters.txt|' ", argValuesFile)
+                      "/run_parameters.nml|' ", argValuesFile)
+        
         system(cmd)
         Sys.sleep(1)
         

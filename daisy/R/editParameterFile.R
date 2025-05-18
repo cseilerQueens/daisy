@@ -31,7 +31,9 @@ editParameterFile <- function(parameterFile, parameterName, parameterValues) {
     
     if (length(linesToReplace) == 0){
     # Finds locations for parameters that are not PFT-specific
-    linesToReplace <- grep(pattern = paste(parameterName, " =", sep = ""), x = lines)
+    # linesToReplace <- grep(pattern = paste(parameterName, " =", sep = ""), x = lines)
+    # The adjusted line below allows for irregualr spacing between parameter name and equal sign
+    linesToReplace <- grep(pattern = paste0(parameterName, "\\s*=\\s*"), x = lines)
     }
     
     if (length(linesToReplace) == 0){

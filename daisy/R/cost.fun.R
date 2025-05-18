@@ -12,11 +12,12 @@
 #' @param farmName The name of the farm
 #' @param keepOutput Logical value indicating if output folders should be kept upon completion.
 #' @param finalOutputFolder The folder to place completed simulations.
+#' @param period Start and end dates over which to average model output when reference data do not vary in time.
 #' @export
 
 cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile, 
                      argLengthsFile, argNamesFile, dataAssimPath, argsToChange, 
-                     farmName, keepOutput, finalOutputFolder) {
+                     farmName, keepOutput, finalOutputFolder, period = c("1980-01", "2020-12")) {
   
     # If output is being kept, a final output folder must be specified.
     if (keepOutput) {
@@ -181,11 +182,43 @@ cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile,
 
         myLevel <- 1
 
+        # Ensure that DAISY gets the spatial extent of the model output
+        # This is required for CLASSIC-v2.0 output
+        
+        nc <- ncdf4::nc_open(nc.mod)
+        
+        # Extract longitude and latitude values
+        lon <- ncdf4::ncvar_get(nc, "longitude")
+        lat <- ncdf4::ncvar_get(nc, "latitude")
+        
+        ncdf4::nc_close(nc)
+        
+        xres <- mean(diff(lon))
+        yres <- mean(diff(lat))
+        
+        xmin <- min(lon) - xres / 2
+        xmax <- max(lon) + xres / 2
+        ymin <- min(lat) - yres / 2
+        ymax <- max(lat) + yres / 2
+        
+        mod.extent <- extent(xmin, xmax, ymin, ymax)
+        
         mod <- raster::brick(nc.mod, level = myLevel)
+        raster::extent(mod) <- raster::extent(mod.extent)
+        
         suppressWarnings(mod <- raster::rotate(mod))
 
         ref <- raster::brick(nc.ref)
         suppressWarnings(ref <- raster::rotate(ref))
+        
+        #---------------------------------------------------------------------------  
+        
+        # Part (I) Compute scores for all variables with reference data that vary in time
+        
+        #---------------------------------------------------------------------------
+        
+        
+        if (raster::nlayers(ref) > 1) {
 
         # model data dates
         dates.mod <- intFun.getZ(nc.mod)
@@ -389,6 +422,91 @@ cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile,
         reg <- stats::lm(y ~ x)
         R <- sqrt(summary(reg)$r.squared)
         S_dist <- 2 * (1 + R)/(sigma + 1/sigma)^2
+        
+        #---------------------------------------------------------------------------  
+        
+        # Part (II) Compute scores for all variables with reference data that do not vary in time
+        
+        #---------------------------------------------------------------------------
+        
+        } else {
+          
+          # model data are averaged over a period since the reference data set
+          # has no time dimension
+          start.date <- period[1]
+          end.date <- period[2]
+          
+          # model data dates
+          dates.mod <- intFun.getZ(nc.mod)
+          mod <- raster::setZ(mod, dates.mod, name = "date")
+          names(mod) <- dates.mod
+          
+          mod <- mod[[which(format(as.Date(raster::getZ(mod)), "%Y-%m") >= start.date &
+                              format(as.Date(raster::getZ(mod)), "%Y-%m") <= end.date)]]
+          
+          mod <- raster::mean(mod, na.rm = TRUE)
+          
+          # get layer names
+          mod.names <- base::names(mod)
+          ref.names <- base::names(ref)
+          
+          # unit conversion if appropriate
+          ref <- ref * ref.unit.conv
+        
+        #---------------------------------------------------------------------------
+        
+        # II Statistical analysis
+        
+        #---------------------------------------------------------------------------
+        
+        # (1) Bias
+        
+        #---------------------------------------------------------------------------
+        # create a mask to excludes all grid cells that the model and reference
+        # data do not have in common.  This mask varies in time.
+        mask <- (mod * ref)
+        mask <- mask - mask + 1
+        
+        mod <- mod * mask
+        ref <- ref * mask
+
+        #---------------------------------------------------------------------------
+        
+        mod.mean <- mod  # data is already time mean
+        ref.mean <- ref  # data is already time mean
+        bias <- mod.mean - ref.mean  # time mean
+        epsilon_bias <- abs(bias)/abs(ref)
+        epsilon_bias[epsilon_bias == Inf] <- NA  # relative error
+        bias.score <- exp(-1 * epsilon_bias)  # bias score as a function of space
+        S_bias <- mean(raster::getValues(bias.score), na.rm = TRUE)  # scalar score
+        
+        #---------------------------------------------------------------------------
+        
+        # (5) dist
+        
+        #---------------------------------------------------------------------------
+        mod.sigma.scalar <- sd(raster::getValues(mod.mean), na.rm = TRUE)  # standard deviation of period mean data
+        ref.sigma.scalar <- sd(raster::getValues(ref.mean), na.rm = TRUE)  # standard deviation of period mean data
+        sigma <- mod.sigma.scalar/ref.sigma.scalar
+        y <- raster::getValues(mod.mean)
+        x <- raster::getValues(ref.mean)
+        reg <- stats::lm(y ~ x)
+        R <- sqrt(summary(reg)$r.squared)
+        S_dist <- 2 * (1 + R)/(sigma + 1/sigma)^2  # weighting does not apply
+        
+        #---------------------------------------------------------------------------
+        
+        # Scores
+        
+        #---------------------------------------------------------------------------
+        
+        S_rmse <- NA
+        S_phase <- NA
+        S_iav <- NA
+        
+        }
+        
+        
 
         #---------------------------------------------------------------------------
 

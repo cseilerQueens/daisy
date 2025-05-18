@@ -21,7 +21,12 @@ getParameterValues <- function(parameterFile, parameterName) {
     data <- readLines(parameterFile)
 
     # Get the section relevant to your parameter of choice
-    data <- data[grep(parameterName, data)]
+    # data <- data[grep(parameterName, data)]
+    
+    pattern <- paste0("^\\s*", parameterName, "(=|\\s|$)")
+    
+    # Extract lines that match the pattern
+    data <- data[grep(pattern, data)]
 
     # Clean data from unwanted information
     ## (a)
