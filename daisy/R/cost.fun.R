@@ -201,7 +201,7 @@ cost.fun <- function(identifier, indivFile, argValuesFile, argTypesFile,
         ymin <- min(lat) - yres / 2
         ymax <- max(lat) + yres / 2
         
-        mod.extent <- extent(xmin, xmax, ymin, ymax)
+        mod.extent <- raster::extent(xmin, xmax, ymin, ymax)
         
         mod <- raster::brick(nc.mod, level = myLevel)
         raster::extent(mod) <- raster::extent(mod.extent)
